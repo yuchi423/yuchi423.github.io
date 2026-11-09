@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vitepress dev docs",
+    "editor": "node editor/start.mjs",
     "build": "vitepress build docs",
     "preview": "vitepress preview docs"
   },

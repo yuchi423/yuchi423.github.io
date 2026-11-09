@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>博客编辑器</title>
+  <link rel="stylesheet" href="/__editor/style.css">
+  <script type="module" src="/__editor/app.js"></script>
+</head>
+<body>
+  <header class="toolbar">
+    <strong class="brand">Yuchi 的博客 · 编辑器</strong>
+    <div class="tools">
+      <button id="new" type="button">新建</button>
+      <button id="open" type="button">打开</button>
+      <label>栏目 <select id="section"><option value="essay">随笔</option><option value="tech">技术</option></select></label>
+      <label>日期 <input id="date" type="date"></label>
+    </div>
+    <div class="tools">
+      <button id="cover" type="button">封面</button>
+      <button id="remove-cover" type="button" hidden>移除封面</button>
+      <button id="image" type="button">图片</button>
+      <button id="link" type="button">链接</button>
+      <button id="attachment" type="button">附件</button>
+      <button id="source" type="button">正文源码</button>
+    </div>
+    <div class="tools">
+      <button id="save-draft" type="button">保存草稿</button>
+      <button id="save" type="button" class="primary">保存到博客</button>
+    </div>
+    <p id="status" role="status" class="status">正在打开预览…</p>
+  </header>
+
+  <main id="canvas" class="canvas">
+    <iframe id="preview" title="博客文章预览"></iframe>
+    <input id="title" class="article-title" aria-label="文章标题" placeholder="请输入标题" autocomplete="off" hidden>
+    <button id="append" type="button" class="append">＋ 添加段落</button>
+    <section id="block" class="block" aria-labelledby="block-label" hidden>
+      <div class="block-toolbar">
+        <label for="markdown" id="block-label">编辑段落</label>
+        <button id="done" type="button">完成</button>
+      </div>
+      <textarea id="markdown" spellcheck="false" placeholder="请输入正文，支持 Markdown"></textarea>
+    </section>
+  </main>
+
+  <input id="file" type="file" hidden>
+
+  <dialog id="open-dialog">
+    <form id="open-form" method="dialog">
+      <h2>打开文章或草稿</h2>
+      <label>选择文件 <select id="open-choice" required></select></label>
+      <div class="dialog-actions">
+        <button type="button" data-close>取消</button>
+        <button type="submit" class="primary">打开</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="link-dialog">
+    <form id="link-form" method="dialog">
+      <h2>插入链接</h2>
+      <label>显示文字 <input id="link-text"></label>
+      <label>网址 <input id="link-url" required placeholder="https://"></label>
+      <div class="dialog-actions">
+        <button type="button" data-close>取消</button>
+        <button type="submit" class="primary">插入</button>
+      </div>
+    </form>
+  </dialog>
+</body>
+</html>
