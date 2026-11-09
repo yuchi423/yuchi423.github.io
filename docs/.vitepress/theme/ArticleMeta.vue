@@ -15,7 +15,7 @@ const updated = computed(() => page.value.lastUpdated
   <div v-if="post" class="post-meta">
     <time :datetime="post.date">发布于 {{ post.date }}</time>
     <time :datetime="updated">更新于 {{ updated }}</time>
-    <span>约 {{ post.minutes }} 分钟</span>
+    <span>约 {{ post.minutes }} 分钟 · 全文 {{ post.wordCount.toLocaleString('zh-CN') }} 字</span>
     <a class="post-tag" :href="withBase(sections[post.section].link)">{{ sections[post.section].label }}</a>
   </div>
 </template>

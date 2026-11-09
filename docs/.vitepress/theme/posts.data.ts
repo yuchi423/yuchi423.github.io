@@ -9,19 +9,23 @@ export interface Post {
   description: string
   date: string
   minutes: number
+  wordCount: number
 }
 
 declare const data: Post[]
 export { data }
 
-function readingMinutes(source: string) {
+function readingStats(source: string) {
   const prose = source
     .replace(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/, '')
     .replace(/^\s*(```|~~~)[\s\S]*?^\s*\1[^\S\r\n]*$/gm, '')
     .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
   const hanCount = (prose.match(/\p{Script=Han}/gu) ?? []).length
-  const wordCount = (prose.replace(/\p{Script=Han}/gu, ' ').match(/[\p{L}\p{N}]+/gu) ?? []).length
-  return Math.max(1, Math.ceil(hanCount / 350 + wordCount / 200))
+  const otherWordCount = (prose.replace(/\p{Script=Han}/gu, ' ').match(/[\p{L}\p{N}]+/gu) ?? []).length
+  return {
+    wordCount: hanCount + otherWordCount,
+    minutes: Math.max(1, Math.ceil(hanCount / 350 + otherWordCount / 200))
+  }
 }
 
 function toPost({ url, frontmatter, src = '' }: ContentData): Post | undefined {
@@ -42,7 +46,7 @@ function toPost({ url, frontmatter, src = '' }: ContentData): Post | undefined {
     title,
     date,
     description: frontmatter.description || '',
-    minutes: readingMinutes(src)
+    ...readingStats(src)
   }
 }
 
