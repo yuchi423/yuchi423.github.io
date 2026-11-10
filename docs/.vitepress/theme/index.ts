@@ -4,6 +4,7 @@ import Layout from './Layout.vue'
 import ArticleMeta from './ArticleMeta.vue'
 import PostList from './PostList.vue'
 import './style.css'
+import './figure.css'
 
 export default {
   extends: DefaultTheme,

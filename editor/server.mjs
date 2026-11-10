@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { cp, mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises'
+import { createRequire } from 'node:module'
 import { basename, dirname, extname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -9,9 +10,31 @@ const docs = join(repo, 'docs')
 const drafts = join(repo, 'drafts', 'editor')
 const preview = join(repo, 'drafts', '.editor-preview')
 const sections = ['essay', 'tech']
+const vendorPrefix = '/__editor/vendor/vditor/dist/'
+const vendorDist = dirname(createRequire(import.meta.url).resolve('vditor'))
+const fileTypes = {
+  '.css': 'text/css',
+  '.js': 'text/javascript',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp',
+  '.avif': 'image/avif',
+  '.bmp': 'image/bmp',
+  '.heic': 'image/heic',
+  '.pdf': 'application/pdf',
+  '.txt': 'text/plain; charset=utf-8',
+  '.gif': 'image/gif',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+  '.ttf': 'font/ttf'
+}
 const staticFiles = {
   '/__editor/': ['index.html', 'text/html'],
   '/__editor/app.js': ['app.js', 'text/javascript'],
+  '/__editor/figures.js': ['figures.js', 'text/javascript'],
+  '/__editor/figure.css': ['../docs/.vitepress/theme/figure.css', 'text/css'],
   '/__editor/style.css': ['style.css', 'text/css']
 }
 
@@ -45,7 +68,7 @@ function postPath(path) {
   return join(docs, path)
 }
 
-function serialize(post, revision) {
+function serialize(post) {
   const fields = {
     ...post.fields,
     title: post.title.trim() || '文章标题',
@@ -53,7 +76,6 @@ function serialize(post, revision) {
   }
   if (post.cover) fields.cover = post.cover
   else delete fields.cover
-  if (revision !== undefined) fields.editorRevision = revision
   const yaml = Object.entries(fields).map(([key, value]) =>
     JSON.stringify(key) + ': ' + JSON.stringify(value)).join('\n')
   return '---\n' + yaml + '\n---\n# ' + fields.title + '\n\n' + post.body + '\n'
@@ -62,6 +84,30 @@ function serialize(post, revision) {
 async function write(path, content) {
   await mkdir(dirname(path), { recursive: true })
   await writeFile(path, content)
+}
+
+async function storeAsset(id, filename, kind, bytes) {
+  const extension = extname(filename).toLowerCase().replace(/[^\w.]/g, '')
+  const stem = safeName(basename(filename, extname(filename))) || 'file'
+  const name = randomUUID().slice(0, 8) + '-' + stem + extension
+  await write(join(draftAssetFolder(id), kind + '--' + name), bytes)
+  await write(join(preview, 'public', kind, name), bytes)
+  return '/' + kind + '/' + name
+}
+
+async function extractEmbeddedImages(post) {
+  const images = /!\[[^\]\n]*\]\(<?(data:image\/([\w.+-]+);base64,([a-z\d+/=]+))>?(?:\s+"[^"\n]*")?\)/gi
+  for (const [reference, source, subtype, content] of post.body.matchAll(images)) {
+    if (!post.body.includes(reference)) continue
+    const extension = { jpeg: 'jpg', 'svg+xml': 'svg' }[subtype.toLowerCase()] || subtype
+    const url = await storeAsset(post.id, '图片.' + extension, 'images', Buffer.from(content, 'base64'))
+    post.body = post.body.replaceAll(reference, (match, offset, body) => {
+      const before = body.slice(body.lastIndexOf('\n', offset - 1) + 1, offset).trim()
+      const after = body.slice(offset + match.length).split('\n', 1)[0].trim()
+      return (before ? '\n\n' : '') + match.replace(source, url) + (after ? '\n\n' : '')
+    })
+  }
+  return post
 }
 
 async function restoreAssets(post, destination) {
@@ -80,38 +126,6 @@ async function restoreAssets(post, destination) {
       await cp(join(folder, file), target, { force: false })
     }
   }
-}
-
-function editableBlocks(md) {
-  md.core.ruler.push('editor-blocks', state => {
-    if (state.env.frontmatter?.editorRevision === undefined) return
-    const tokens = state.tokens
-    const heading = tokens.find(token => token.type === 'heading_open' && token.tag === 'h1')
-    if (!heading) return
-    heading.attrSet('data-editor-revision', String(state.env.frontmatter.editorRevision))
-    const bodyLine = heading.map[1] + 1
-    const blocks = []
-    for (let index = 0; index < tokens.length; index++) {
-      const token = tokens[index]
-      if (token.level !== 0 || token.nesting < 0 || !token.map || token.map[0] < bodyLine) continue
-      let end = index
-      if (token.nesting === 1) {
-        end = tokens.findIndex((candidate, candidateIndex) =>
-          candidateIndex > index && candidate.level === 0 && candidate.nesting === -1)
-        if (end === -1) continue
-      }
-      blocks.push([index, end, token.map.map(line => line - bodyLine)])
-      index = end
-    }
-    for (const [index, end, [from, to]] of blocks.reverse()) {
-      const open = new state.Token('html_block', '', 0)
-      const close = new state.Token('html_block', '', 0)
-      open.content = '<div data-editor-block="' + from + ':' + to + '">\n'
-      close.content = '</div>\n'
-      tokens.splice(end + 1, 0, close)
-      tokens.splice(index, 0, open)
-    }
-  })
 }
 
 async function jsonBody(request) {
@@ -158,9 +172,39 @@ function editorMiddleware(getMarkdown) {
       response.end()
       return
     }
-    if (!pathname.startsWith('/__editor/')) return next()
+    const asset = pathname.match(/^\/(images|attachments)\/([^/]+)$/)
+    if (!pathname.startsWith('/__editor/') && !asset) return next()
 
     try {
+      if (asset) {
+        if (request.method !== 'GET') return next()
+        const name = decodeURIComponent(asset[2])
+        if (name !== basename(name) || name === '.' || name === '..') return next()
+        // A newly saved asset can be requested before Vite's public-file watcher sees it.
+        const content = await readFile(join(preview, 'public', asset[1], name)).catch(error => {
+          if (error.code === 'ENOENT') return null
+          throw error
+        })
+        if (!content) return next()
+        if (searchParams.has('import')) {
+          response.writeHead(200, { 'Content-Type': 'text/javascript' })
+          response.end('export default ' + JSON.stringify(pathname))
+          return
+        }
+        response.writeHead(200, { 'Content-Type': fileTypes[extname(name).toLowerCase()] || 'application/octet-stream' })
+        response.end(content)
+        return
+      }
+      if (pathname.startsWith(vendorPrefix) && request.method === 'GET') {
+        const file = pathname.slice(vendorPrefix.length)
+        const type = fileTypes[extname(file)]
+        if (type && /^[\w./-]+$/.test(file)) {
+          const content = await readFile(join(vendorDist, file))
+          response.writeHead(200, { 'Content-Type': type })
+          response.end(content)
+          return
+        }
+      }
       if (staticFiles[pathname] && request.method === 'GET') {
         const [name, type] = staticFiles[pathname]
         const content = await readFile(join(editorDir, name))
@@ -173,7 +217,9 @@ function editorMiddleware(getMarkdown) {
         if (action === 'list') return send(response, await listPosts())
         if (action === 'draft') {
           const folder = draftFolder(searchParams.get('id'))
-          return send(response, JSON.parse(await readFile(join(folder, 'draft.json'), 'utf8')))
+          const post = await extractEmbeddedImages(JSON.parse(await readFile(join(folder, 'draft.json'), 'utf8')))
+          await restoreAssets(post, join(preview, 'public'))
+          return send(response, post)
         }
         if (action === 'post') {
           const path = searchParams.get('path')
@@ -181,7 +227,7 @@ function editorMiddleware(getMarkdown) {
           const env = { path: file, relativePath: path }
           getMarkdown().render(await readFile(file, 'utf8'), env)
           const { title, date, cover, ...fields } = env.frontmatter
-          return send(response, {
+          return send(response, await extractEmbeddedImages({
             id: randomUUID(),
             path,
             section: path.split('/')[0],
@@ -190,28 +236,23 @@ function editorMiddleware(getMarkdown) {
             cover: cover || '',
             fields,
             body: env.content.replace(/^\s*# [^\r\n]*(?:\r?\n){1,2}/, '').replace(/\r\n/g, '\n').trimEnd()
-          })
+          }))
         }
       }
       if (request.method === 'POST') {
         const data = await jsonBody(request)
         if (action === 'asset') {
           const kind = data.kind === 'images' ? 'images' : 'attachments'
-          const extension = extname(data.name).toLowerCase().replace(/[^\w.]/g, '')
-          const stem = safeName(basename(data.name, extname(data.name))) || 'file'
-          const name = randomUUID().slice(0, 8) + '-' + stem + extension
-          const bytes = Buffer.from(data.content, 'base64')
-          await write(join(draftAssetFolder(data.id), kind + '--' + name), bytes)
-          await write(join(preview, 'public', kind, name), bytes)
-          return send(response, { url: '/' + kind + '/' + name })
+          const url = await storeAsset(data.id, data.name, kind, Buffer.from(data.content, 'base64'))
+          return send(response, { url })
         }
-        const post = data.post
+        const post = await extractEmbeddedImages(data.post)
         const folder = draftFolder(post.id)
         check(sections.includes(post.section), '请选择文章栏目')
         if (action === 'preview') {
           await restoreAssets(post, join(preview, 'public'))
           const path = post.section + '/__editor-preview.md'
-          await write(join(preview, path), serialize(post, data.revision))
+          await write(join(preview, path), serialize(post))
           return send(response, { route: '/' + path.slice(0, -3) })
         }
         if (action === 'draft') {
@@ -247,12 +288,16 @@ export function editorConfig(blog) {
       ...blog.markdown,
       config(md) {
         blog.markdown.config?.(md)
-        editableBlocks(md)
         markdown = md
       }
     },
     vite: {
       ...blog.vite,
+      optimizeDeps: {
+        ...blog.vite?.optimizeDeps,
+        // The Mermaid plugin lists debug even when it is not installed.
+        include: blog.vite?.optimizeDeps?.include?.filter(name => name !== 'debug')
+      },
       plugins: [...(blog.vite?.plugins || []), {
         name: 'local-blog-editor',
         enforce: 'pre',

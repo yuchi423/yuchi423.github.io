@@ -40,7 +40,7 @@ body {
   font-size: 14px;
 }
 
-.tools, .dialog-actions, .block-toolbar {
+.tools, .dialog-actions {
   display: flex;
   gap: 6px;
   align-items: center;
@@ -77,7 +77,14 @@ button:disabled { opacity: .55; cursor: default; }
 }
 
 .status.error { color: #d35459; }
-.canvas { position: relative; padding-bottom: 80px; }
+.canvas { padding-bottom: 60px; }
+
+.compose {
+  max-width: 688px;
+  margin: 56px auto 0;
+  padding: 0 24px;
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+}
 
 iframe {
   display: block;
@@ -88,43 +95,48 @@ iframe {
 
 .article-title {
   box-sizing: border-box;
-  position: absolute;
-  padding: 0;
+  width: 100%;
+  padding: 0 0 16px;
+  margin-bottom: 16px;
   border: 0;
+  border-bottom: 1px solid var(--line);
   outline: 0;
-  border-radius: 0;
-  font: inherit;
   background: transparent;
-  color: var(--brand);
+  color: var(--text);
+  font-size: 32px;
+  font-weight: 600;
 }
 
-.article-title:focus { box-shadow: 0 1px var(--brand); }
-.append { margin: 12px 20px; }
-
-.block {
-  box-sizing: border-box;
-  position: absolute;
-  z-index: 1;
-  padding: 12px;
-  background: var(--surface);
-  border: 1px solid var(--brand);
+.cover-preview {
+  display: block;
+  max-width: 100%;
+  margin-bottom: 24px;
   border-radius: 8px;
-  box-shadow: 0 6px 20px #0002;
 }
 
-.block-toolbar { justify-content: space-between; font-size: 13px; margin-bottom: 8px; }
+#rich-editor.vditor {
+  border: 0;
+  background: var(--surface);
+  --textarea-background-color: var(--surface);
+  --textarea-text-color: var(--text);
+}
 
-textarea {
+#rich-editor .vditor-reset {
+  padding: 0 !important;
+  font: 16px/1.75 Inter, -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+#markdown {
   display: block;
   box-sizing: border-box;
   width: 100%;
-  min-height: 90px;
+  min-height: 450px;
   resize: vertical;
-  padding: 8px;
-  border: 1px solid var(--line);
-  border-radius: 5px;
+  padding: 0;
+  border: 0;
+  outline: 0;
   background: var(--surface);
-  font: 14px/1.6 ui-monospace, monospace;
+  font: 15px/1.75 ui-monospace, monospace;
 }
 
 dialog {
@@ -141,3 +153,87 @@ dialog::backdrop { background: #0006; }
 dialog h2 { margin-top: 0; font-size: 18px; }
 dialog label { display: grid; gap: 6px; margin-bottom: 12px; }
 .dialog-actions { justify-content: flex-end; }
+
+.figure-stage { position: relative; }
+
+#rich-editor .article-figure {
+  margin: 16px 0;
+  cursor: pointer;
+}
+
+#rich-editor .figure-image { line-height: 0; }
+
+#rich-editor .figure-image > img {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  margin: 0;
+}
+
+#rich-editor .figure-image .vditor-ir__marker { display: none; }
+
+#rich-editor .article-figure::after {
+  content: attr(data-caption);
+  min-height: 22px;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 22px;
+  text-align: center;
+}
+
+#rich-editor .article-figure.figure-selected::after { visibility: hidden; }
+#rich-editor .figure-selected img { outline: 1px solid var(--brand); }
+
+#figure-controls {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+#figure-controls > * {
+  position: absolute;
+  pointer-events: auto;
+}
+
+.figure-toolbar {
+  top: var(--figure-toolbar-top);
+  right: 8px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 6px 8px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  box-shadow: 0 2px 8px #0002;
+  font-size: 12px;
+}
+
+#figure-width { width: 42px; }
+
+#figure-resize {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  background: var(--brand);
+  border: 1px solid var(--surface);
+  border-radius: 4px;
+  cursor: nwse-resize;
+  touch-action: none;
+}
+
+#figure-caption {
+  box-sizing: border-box;
+  height: 22px;
+  padding: 0 4px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+}

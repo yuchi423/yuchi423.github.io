@@ -26,4 +26,5 @@ for (const section of ['tech', 'essay']) {
 
 const server = await createServer(root, { host: '127.0.0.1', port: 5174, strictPort: true })
 await server.listen()
-console.log('博客编辑器  http://127.0.0.1:5174/__editor/')
+console.log('编辑器已启动，请在浏览器打开 http://127.0.0.1:5174/__editor/')
+console.log('保持此终端运行，按 Ctrl+C 停止。')

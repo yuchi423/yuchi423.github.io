@@ -65,6 +65,34 @@ export default withMermaid(defineConfig({
     image: { lazyLoading: true },
     container: { tipLabel: '提示', infoLabel: '说明', warningLabel: '注意', dangerLabel: '警告', detailsLabel: '详情' },
     config(md) {
+      md.core.ruler.push('blog-image-layouts', state => {
+        const layouts = state.env.frontmatter?.imageLayouts
+        if (!layouts) return
+
+        const tokens = state.tokens
+        for (let index = 0; index < tokens.length - 2; index++) {
+          const [open, inline, close] = tokens.slice(index, index + 3)
+          if (open.type !== 'paragraph_open' || close.type !== 'paragraph_close') continue
+          if (inline.children?.length !== 1 || inline.children[0].type !== 'image') continue
+          const source = inline.children[0].attrGet('src')
+          const layout = source && layouts[source]
+          if (!layout) continue
+
+          open.tag = close.tag = 'figure'
+          open.attrJoin('class', 'article-figure')
+          const align = !layout.autoCenter && ['left', 'right'].includes(layout.align) ? layout.align : 'center'
+          open.attrSet('data-align', align)
+          if (typeof layout.width === 'number' && layout.width >= 5 && layout.width <= 100) {
+            open.attrJoin('style', '--figure-width:' + layout.width + '%')
+          }
+          if (typeof layout.caption === 'string' && layout.caption.trim()) {
+            const caption = new state.Token('html_inline', '', 0)
+            caption.content = '<figcaption v-pre>' + md.utils.escapeHtml(layout.caption) + '</figcaption>'
+            inline.children.push(caption)
+          }
+        }
+      })
+
       md.core.ruler.push('blog-article-meta', state => {
         if (!articleSection(state.env.relativePath ?? '')) return
 

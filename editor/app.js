@@ -1,27 +1,47 @@
+import { setupFigures } from './figures.js'
+
 const element = id => document.getElementById(id)
 const frame = element('preview')
-const canvas = element('canvas')
+const compose = element('compose')
 const title = element('title')
 const section = element('section')
 const date = element('date')
-const block = element('block')
+const rich = element('rich-editor')
 const markdown = element('markdown')
 const file = element('file')
 const status = element('status')
+const previewButton = element('toggle-preview')
+const sourceButton = element('source')
 
 let post
-let active
 let dirty = false
+let richChanged = false
+let sourceMode = false
+let previewMode = false
 let assetAction
 let linkRange
-let frameRoute
-let observer
+let richRange
+let frameObserver
 let resizeObserver
-let revision = 0
-let previewTimer
-let sending = false
-let pending = false
-const snapshots = new Map()
+const dark = matchMedia('(prefers-color-scheme: dark)').matches
+const vendor = '/__editor/vendor/vditor'
+
+const editor = new window.Vditor(rich, {
+  cdn: vendor,
+  mode: 'ir',
+  toolbar: [],
+  toolbarConfig: { hide: true },
+  cache: { enable: false },
+  counter: { enable: false },
+  theme: dark ? 'dark' : 'classic',
+  preview: { theme: { current: dark ? 'dark' : 'light', path: vendor + '/dist/css/content-theme' } },
+  minHeight: 450,
+  placeholder: '请输入正文',
+  input: markRichChanged,
+  after: newPost
+})
+
+const figures = setupFigures(rich, () => post, () => { dirty = true })
 
 function showStatus(message, error = false) {
   status.textContent = message
@@ -41,6 +61,7 @@ async function api(action, data) {
 
 function action(id, callback) {
   element(id).addEventListener('click', async () => {
+    if (!post) return
     try {
       await callback()
     } catch (error) {
@@ -49,58 +70,63 @@ function action(id, callback) {
   })
 }
 
+function readBody() {
+  if (sourceMode) return markdown.value
+  return richChanged ? editor.getValue() : post.body
+}
+
 function readForm() {
-  return { ...post, title: title.value, section: section.value, date: date.value }
+  return { ...post, title: title.value, section: section.value, date: date.value, body: readBody() }
 }
 
-function queuePreview() {
-  dirty = true
-  clearTimeout(previewTimer)
-  previewTimer = setTimeout(updatePreview, 400)
+function showComposer() {
+  previewMode = false
+  frame.hidden = true
+  compose.hidden = false
+  previewButton.textContent = '博客预览'
+  sourceButton.disabled = false
 }
 
-async function updatePreview() {
-  clearTimeout(previewTimer)
-  if (sending) {
-    pending = true
-    return
-  }
-  sending = true
-  const snapshot = readForm()
-  const nextRevision = ++revision
-  snapshots.set(nextRevision, snapshot.body)
-  if (snapshots.size > 30) snapshots.delete(snapshots.keys().next().value)
+async function showPreview() {
+  const current = post
+  previewButton.disabled = true
   try {
-    const { route } = await api('preview', { post: snapshot, revision: nextRevision })
-    if (snapshot.id !== post.id) return
-    if (frameRoute !== route) {
-      frameRoute = route
-      frame.src = route
-    }
-  } catch (error) {
-    showStatus(error.message, true)
+    const { route } = await api('preview', { post: readForm() })
+    if (post !== current) return
+    previewMode = true
+    compose.hidden = true
+    frame.hidden = false
+    frame.src = route
+    previewButton.textContent = '返回写作'
+    sourceButton.disabled = true
   } finally {
-    sending = false
-    if (pending) {
-      pending = false
-      updatePreview()
-    }
+    previewButton.disabled = false
   }
+}
+
+function showCover() {
+  const image = element('cover-preview')
+  image.hidden = !post.cover
+  if (post.cover) image.src = post.cover
+  else image.removeAttribute('src')
+  element('remove-cover').hidden = !post.cover
 }
 
 function loadPost(next) {
-  clearTimeout(previewTimer)
-  active = undefined
-  block.hidden = true
+  figures.clear()
   post = next
   title.value = next.title
   section.value = next.section
   section.disabled = Boolean(next.path)
   date.value = next.date
-  element('remove-cover').hidden = !next.cover
+  markdown.value = next.body
+  editor.setValue(next.body, true)
+  richChanged = false
+  richRange = undefined
   dirty = false
-  showStatus(next.path || '点击正文编辑，或添加段落开始写作。')
-  updatePreview()
+  showCover()
+  showComposer()
+  showStatus(next.path || '在正文里直接输入，回车即可换行。')
 }
 
 function newPost() {
@@ -112,158 +138,119 @@ function canLeave() {
   return !dirty || window.confirm('当前文章还有改动。切换文章？')
 }
 
-function position(element, rect, y) {
-  const origin = canvas.getBoundingClientRect()
-  const page = frame.getBoundingClientRect()
-  element.style.left = page.left - origin.left + rect.left + 'px'
-  element.style.width = rect.width + 'px'
-  element.style.top = page.top - origin.top + y + 'px'
-}
-
-function syncFrame() {
-  const doc = frame.contentDocument
-  const heading = doc?.querySelector('h1[data-editor-revision]')
-  if (!heading) return
-  const layout = doc.querySelector('.Layout')
-  frame.style.height = Math.max(380, Math.ceil(layout.getBoundingClientRect().height)) + 'px'
-  const rect = heading.getBoundingClientRect()
-  const content = heading.parentElement.getBoundingClientRect()
-  title.style.height = rect.height + 'px'
-  const style = frame.contentWindow.getComputedStyle(heading)
-  title.style.font = style.font
-  position(title, content, rect.top)
-  title.hidden = false
-  const page = frame.getBoundingClientRect()
-  const append = element('append')
-  append.style.marginLeft = Math.max(12, page.left + content.left - canvas.getBoundingClientRect().left) + 'px'
-}
-
-function offset(body, line) {
-  const lines = body.split('\n')
-  if (line >= lines.length) return body.length
-  return lines.slice(0, line).reduce((length, value) => length + value.length + 1, 0)
-}
-
-function selectBlock(target, doc) {
-  const heading = doc.querySelector('h1[data-editor-revision]')
-  const rendered = snapshots.get(Number(heading?.dataset.editorRevision))
-  if (rendered === undefined) return
-  const [startLine, endLine] = target.dataset.editorBlock.split(':').map(Number)
-  const start = offset(rendered, startLine)
-  let end = offset(rendered, endLine)
-  if (rendered[end - 1] === '\n') end--
-  const fragment = rendered.slice(start, end)
-  const before = rendered.slice(0, start)
-  const after = rendered.slice(end)
-  let current = start
-  if (!post.body.startsWith(before + fragment)) {
-    if (!post.body.endsWith(fragment + after)) {
-      showStatus('预览正在更新，稍后点选段落。')
-      return
-    }
-    current = post.body.length - after.length - fragment.length
-  }
-  finishBlock()
-  const rect = (target.lastElementChild || target).getBoundingClientRect()
-  const content = heading.parentElement.getBoundingClientRect()
-  openBlock(current, current + fragment.length, content, rect.bottom + 6)
-}
-
 frame.addEventListener('load', () => {
-  observer?.disconnect()
+  frameObserver?.disconnect()
   resizeObserver?.disconnect()
   const doc = frame.contentDocument
-  const styles = doc.createElement('style')
-  styles.textContent = '.Layout { min-height: 0 !important; } h1[data-editor-revision] { visibility: hidden; } [data-editor-block] { display: contents; } [data-editor-block] > :first-child:hover { outline: 1px solid var(--vp-c-divider); outline-offset: 3px; }'
-  doc.head.append(styles)
-  doc.addEventListener('click', event => {
-    const target = event.target.closest('[data-editor-block]')
-    if (target) {
-      event.preventDefault()
-      selectBlock(target, doc)
-    } else {
-      if (event.target.closest('a')) event.preventDefault()
-      finishBlock()
+  function syncPreview() {
+    const layout = doc.querySelector('.Layout')
+    if (!layout) return
+    layout.style.minHeight = '0'
+    frame.style.height = Math.max(380, Math.ceil(layout.getBoundingClientRect().height)) + 'px'
+    for (const link of doc.querySelectorAll('.post-pager a, .post-sidebar a')) {
+      link.target = '_self'
+    }
+  }
+  frameObserver = new MutationObserver(syncPreview)
+  frameObserver.observe(doc.body, { childList: true, subtree: true })
+  resizeObserver = new ResizeObserver(syncPreview)
+  resizeObserver.observe(doc.body)
+  syncPreview()
+  doc.addEventListener('click', async event => {
+    const link = event.target.closest('.post-pager a, .post-sidebar a')
+    if (!link) return
+    event.preventDefault()
+    const path = decodeURIComponent(link.pathname.slice(1)) + '.md'
+    if (link.getAttribute('aria-current') === 'page' || path === post.path || !canLeave()) return
+    try {
+      loadPost(await api('post?path=' + encodeURIComponent(path)))
+    } catch (error) {
+      showStatus(error.message, true)
     }
   })
-  observer = new MutationObserver(syncFrame)
-  observer.observe(doc.body, { childList: true, subtree: true, characterData: true })
-  resizeObserver = new ResizeObserver(syncFrame)
-  resizeObserver.observe(doc.body)
-  syncFrame()
 })
 
-window.addEventListener('resize', syncFrame)
-
-function editorSize() {
-  markdown.style.height = 'auto'
-  markdown.style.height = Math.min(300, markdown.scrollHeight + 2) + 'px'
-}
-
-function openBlock(start, end, rect, top, label = '编辑段落') {
-  active = { before: post.body.slice(0, start), after: post.body.slice(end) }
-  markdown.value = post.body.slice(start, end)
-  element('block-label').textContent = label
-  block.hidden = false
-  position(block, rect, top)
-  editorSize()
-  markdown.focus({ preventScroll: true })
-  markdown.setSelectionRange(markdown.value.length, markdown.value.length)
-  const blockRect = block.getBoundingClientRect()
-  if (blockRect.bottom > innerHeight) block.scrollIntoView({ block: 'nearest' })
-}
-
-function openAtEnd() {
-  finishBlock()
-  const heading = frame.contentDocument.querySelector('h1[data-editor-revision]')
-  const rect = heading?.parentElement.getBoundingClientRect() || { left: 20, width: frame.clientWidth - 40 }
-  const end = post.body.length
-  openBlock(end, end, rect, frame.clientHeight + 46, '新段落')
-  if (post.body) active.before += post.body.endsWith('\n') ? '\n' : '\n\n'
-}
-
-function finishBlock() {
-  if (!active) return
-  active = undefined
-  block.hidden = true
-  updatePreview()
-}
-
-markdown.addEventListener('input', () => {
-  if (!active) return
-  post.body = active.before + markdown.value + active.after
-  editorSize()
-  queuePreview()
+action('toggle-preview', () => {
+  if (previewMode) showComposer()
+  else return showPreview()
 })
 
-markdown.addEventListener('keydown', event => {
-  if (event.key === 'Escape' || (event.key === 'Enter' && (event.metaKey || event.ctrlKey))) {
-    event.preventDefault()
-    finishBlock()
+for (const input of [title, section, date, markdown]) {
+  input.addEventListener('input', () => { dirty = true })
+}
+function markRichChanged() {
+  richChanged = true
+  dirty = true
+}
+
+rich.addEventListener('input', markRichChanged)
+rich.addEventListener('keydown', event => {
+  if (event.key === 'Enter') markRichChanged()
+})
+
+function rememberRichRange() {
+  const selection = window.getSelection()
+  if (selection.rangeCount && rich.contains(selection.anchorNode) && rich.contains(selection.focusNode)) {
+    richRange = selection.getRangeAt(0).cloneRange()
   }
-})
+  return richRange
+}
 
-for (const input of [title, section, date]) input.addEventListener('input', queuePreview)
-action('append', openAtEnd)
-action('done', finishBlock)
+document.addEventListener('selectionchange', rememberRichRange)
+rich.addEventListener('focusout', rememberRichRange)
 
 action('source', () => {
-  finishBlock()
-  const heading = frame.contentDocument.querySelector('h1[data-editor-revision]')
-  const rect = heading?.parentElement.getBoundingClientRect() || { left: 20, width: frame.clientWidth - 40 }
-  openBlock(0, post.body.length, rect, (heading?.getBoundingClientRect().bottom || 70) + 32, '正文 Markdown')
+  post.body = readBody()
+  figures.clear()
+  sourceMode = !sourceMode
+  markdown.hidden = !sourceMode
+  rich.hidden = sourceMode
+  sourceButton.textContent = sourceMode ? '返回正文' : 'Markdown 源码'
+  if (sourceMode) {
+    markdown.value = post.body
+    markdown.focus()
+  } else {
+    editor.setValue(post.body, true)
+    richChanged = false
+    richRange = undefined
+    editor.focus()
+  }
 })
 
 function selectedRange() {
-  return active ? [markdown.selectionStart, markdown.selectionEnd] : undefined
+  return sourceMode ? [markdown.selectionStart, markdown.selectionEnd] : rememberRichRange()
 }
 
-function insert(text, range) {
-  if (!active) openAtEnd()
-  markdown.focus({ preventScroll: true })
-  const [start, end] = range || [markdown.selectionStart, markdown.selectionEnd]
-  markdown.setRangeText(text, start, end, 'end')
-  markdown.dispatchEvent(new Event('input'))
+function insert(text, range, imageBlock = false) {
+  if (previewMode) showComposer()
+  if (sourceMode) {
+    markdown.focus()
+    const value = imageBlock ? '\n\n' + text + '\n\n' : text
+    markdown.setRangeText(value, ...(range || [markdown.selectionStart, markdown.selectionEnd]), 'end')
+  } else {
+    const surface = rich.querySelector('.vditor-ir [contenteditable="true"]')
+    const cursor = range?.cloneRange() || document.createRange()
+    surface.focus()
+    if (!range) {
+      cursor.selectNodeContents(surface)
+      cursor.collapse(false)
+    }
+    const selection = window.getSelection()
+    selection.removeAllRanges()
+    selection.addRange(cursor)
+    if (imageBlock) {
+      const block = cursor.startContainer.parentElement?.closest('p')
+      if (block?.textContent.replace(/\u200b/g, '').trim()) {
+        document.execCommand('insertParagraph')
+      }
+      editor.insertMD(text)
+      document.execCommand('insertParagraph')
+    } else {
+      editor.insertMD(text)
+    }
+    richChanged = true
+  }
+  dirty = true
 }
 
 function markdownLabel(text) {
@@ -279,10 +266,8 @@ for (const kind of ['cover', 'image', 'attachment']) {
   })
 }
 
-file.addEventListener('change', async () => {
-  const picked = file.files[0]
-  if (!picked) return
-  const { kind, range } = assetAction
+async function insertAsset(picked, kind, range) {
+  const current = post
   try {
     const content = await new Promise((resolve, reject) => {
       const reader = new FileReader()
@@ -290,36 +275,68 @@ file.addEventListener('change', async () => {
       reader.onerror = reject
       reader.readAsDataURL(picked)
     })
+    const extension = picked.type.split('/')[1]?.replace('jpeg', 'jpg').replace('svg+xml', 'svg')
+    const name = picked.name || '图片.' + (extension || 'png')
     const { url } = await api('asset', {
-      id: post.id,
-      name: picked.name,
+      id: current.id,
+      name,
       kind: kind === 'attachment' ? 'attachments' : 'images',
       content
     })
+    if (post !== current) return
     if (kind === 'cover') {
       post.cover = url
-      element('remove-cover').hidden = false
+      showCover()
       dirty = true
-      updatePreview()
+      if (previewMode) await showPreview()
     } else {
-      insert((kind === 'image' ? '!' : '') + '[' + markdownLabel(picked.name) + '](' + url + ')', range)
+      const image = kind === 'image'
+      insert((image ? '!' : '') + '[' + markdownLabel(name) + '](' + url + ')', range, image)
     }
   } catch (error) {
     showStatus(error.message, true)
   }
+}
+
+file.addEventListener('change', () => {
+  const picked = file.files[0]
+  if (picked) insertAsset(picked, assetAction.kind, assetAction.range)
 })
 
-action('remove-cover', () => {
+async function pasteImage(event) {
+  const clipboard = event.clipboardData
+  const file = Array.from(clipboard.files).find(item => item.type.startsWith('image/'))
+  const text = clipboard.getData('text/plain').trim()
+  const embedded = text.match(/^(?:!\[[^\]\n]*\]\(<?)?(data:image\/[\w.+-]+;base64,[a-z\d+/=]+)(?:>?\))?$/i)
+  if (!file && !embedded) return
+
+  event.preventDefault()
+  event.stopPropagation()
+  const range = selectedRange()
+  try {
+    const image = file || await (await fetch(embedded[1])).blob()
+    await insertAsset(image, 'image', range)
+  } catch (error) {
+    showStatus(error.message, true)
+  }
+}
+
+rich.addEventListener('paste', pasteImage, { capture: true })
+markdown.addEventListener('paste', pasteImage, { capture: true })
+
+action('remove-cover', async () => {
   post.cover = ''
-  element('remove-cover').hidden = true
+  showCover()
   dirty = true
-  updatePreview()
+  if (previewMode) await showPreview()
 })
 
 const linkDialog = element('link-dialog')
 action('link', () => {
   linkRange = selectedRange()
-  element('link-text').value = linkRange ? markdown.value.slice(...linkRange) : ''
+  element('link-text').value = sourceMode && linkRange
+    ? markdown.value.slice(...linkRange)
+    : linkRange?.toString() || ''
   element('link-url').value = ''
   linkDialog.showModal()
 })
@@ -358,11 +375,10 @@ element('open-form').addEventListener('submit', async event => {
   event.preventDefault()
   try {
     loadPost(await api(element('open-choice').value))
-    openDialog.close()
   } catch (error) {
     showStatus(error.message, true)
-    openDialog.close()
   }
+  openDialog.close()
 })
 
 for (const button of document.querySelectorAll('[data-close]')) {
@@ -377,6 +393,7 @@ action('save-draft', async () => {
 
 action('save', async () => {
   if (!title.value.trim()) {
+    showComposer()
     title.focus()
     throw new Error('请先填写标题')
   }
@@ -384,12 +401,9 @@ action('save', async () => {
     date.focus()
     throw new Error('请填写发布日期')
   }
-  const snapshot = readForm()
-  const { path } = await api('save', { post: snapshot })
+  const { path } = await api('save', { post: readForm() })
   post.path = path
   section.disabled = true
   dirty = false
   showStatus('已保存到 docs/' + path + '。提交并推送到 main 后发布。')
 })
-
-newPost()
