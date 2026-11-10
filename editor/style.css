@@ -214,14 +214,28 @@ dialog label { display: grid; gap: 6px; margin-bottom: 12px; }
 
 #figure-width { width: 42px; }
 
-#figure-resize {
+.figure-handle {
   width: 16px;
   height: 16px;
   padding: 0;
   background: var(--brand);
   border: 1px solid var(--surface);
   border-radius: 4px;
-  cursor: nwse-resize;
+  touch-action: none;
+}
+
+#figure-resize { cursor: nwse-resize; }
+#figure-resize[data-side="left"] { cursor: nesw-resize; }
+#figure-resize-width { cursor: ew-resize; }
+#figure-resize-height { cursor: ns-resize; }
+
+#rich-editor .article-figure[data-align="free"]::after {
+  width: var(--figure-width, auto);
+  margin-inline-start: var(--figure-inset);
+}
+
+#rich-editor .article-figure[data-align="free"] img {
+  cursor: ew-resize;
   touch-action: none;
 }
 

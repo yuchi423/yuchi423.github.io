@@ -80,10 +80,20 @@ export default withMermaid(defineConfig({
 
           open.tag = close.tag = 'figure'
           open.attrJoin('class', 'article-figure')
-          const align = !layout.autoCenter && ['left', 'right'].includes(layout.align) ? layout.align : 'center'
+          const align = !layout.autoCenter && ['left', 'right', 'free'].includes(layout.align) ? layout.align : 'center'
           open.attrSet('data-align', align)
+          const styles = []
           if (typeof layout.width === 'number' && layout.width >= 5 && layout.width <= 100) {
-            open.attrJoin('style', '--figure-width:' + layout.width + '%')
+            styles.push('--figure-width:' + layout.width + '%')
+          }
+          if (typeof layout.ratio === 'number' && Number.isFinite(layout.ratio) && layout.ratio > 0) {
+            styles.push('--figure-ratio:' + layout.ratio)
+          }
+          if (align === 'free' && typeof layout.offset === 'number' && layout.offset >= 0 && layout.offset <= 100) {
+            styles.push('--figure-offset:' + layout.offset + '%')
+          }
+          if (styles.length) {
+            open.attrSet('style', [open.attrGet('style'), ...styles].filter(Boolean).join(';'))
           }
           if (typeof layout.caption === 'string' && layout.caption.trim()) {
             const caption = new state.Token('html_inline', '', 0)
