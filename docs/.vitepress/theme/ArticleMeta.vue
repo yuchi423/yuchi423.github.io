@@ -4,7 +4,7 @@ import { useData, withBase } from 'vitepress'
 import { sections } from '../sections'
 import { data as posts } from './posts.data'
 
-const { page, frontmatter } = useData()
+const { page } = useData()
 const post = computed(() => posts.find(item => item.url === '/' + page.value.relativePath.replace(/\.md$/, '')))
 const updated = computed(() => page.value.lastUpdated
   ? new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Shanghai' }).format(page.value.lastUpdated)
@@ -18,15 +18,7 @@ const updated = computed(() => page.value.lastUpdated
     <span>约 {{ post.minutes }} 分钟 · 全文 {{ post.wordCount.toLocaleString('zh-CN') }} 字</span>
     <a class="post-tag" :href="withBase(sections[post.section].link)">{{ sections[post.section].label }}</a>
   </div>
-  <img v-if="post && frontmatter.cover" :src="withBase(frontmatter.cover)" alt="文章封面" class="post-cover">
+  <figure v-if="post?.cover" class="article-cover">
+    <img :src="withBase(post.cover)" alt="">
+  </figure>
 </template>
-
-<style scoped>
-.post-cover {
-  display: block;
-  max-width: 100%;
-  height: auto;
-  margin: 0 0 24px;
-  border-radius: 8px;
-}
-</style>

@@ -107,13 +107,6 @@ iframe {
   font-weight: 600;
 }
 
-.cover-preview {
-  display: block;
-  max-width: 100%;
-  margin-bottom: 24px;
-  border-radius: 8px;
-}
-
 #rich-editor.vditor {
   border: 0;
   background: var(--surface);

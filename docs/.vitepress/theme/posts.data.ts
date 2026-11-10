@@ -7,6 +7,7 @@ export interface Post {
   section: Section
   title: string
   description: string
+  cover?: string
   date: string
   minutes: number
   wordCount: number
@@ -46,6 +47,7 @@ function toPost({ url, frontmatter, src = '' }: ContentData): Post | undefined {
     title,
     date,
     description: frontmatter.description || '',
+    cover: typeof frontmatter.cover === 'string' ? frontmatter.cover : undefined,
     ...readingStats(src)
   }
 }

@@ -106,7 +106,7 @@ async function showPreview() {
 
 function showCover() {
   const image = element('cover-preview')
-  image.hidden = !post.cover
+  element('cover-block').hidden = !post.cover
   if (post.cover) image.src = post.cover
   else image.removeAttribute('src')
   element('remove-cover').hidden = !post.cover

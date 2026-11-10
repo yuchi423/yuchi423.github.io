@@ -23,7 +23,7 @@ const neighbors = computed(() => [
     <template #home-features-after>
       <section class="home-posts" aria-labelledby="recent-title">
         <h2 id="recent-title">最新文章</h2>
-        <PostList :limit="6" />
+        <PostList :limit="6" cards />
       </section>
     </template>
     <template #sidebar-nav-after>
