@@ -43,59 +43,26 @@
   margin-bottom: 16px;
 }
 
-.post-cards {
-  display: grid;
-  gap: 18px;
-  list-style: none;
-  padding: 0;
+.post-links,
+.vp-doc .post-links {
+  list-style: square;
+  padding-inline-start: 1.25em;
 }
 
-.post-card {
-  overflow: hidden;
-  border: 1px solid var(--vp-c-divider);
-  border-radius: 12px;
+.post-links li {
+  margin-bottom: 8px;
 }
 
-.post-card:focus-within {
-  outline: 2px solid var(--vp-c-brand-1);
-  outline-offset: 3px;
-}
-
-.post-card-link {
-  display: block;
-}
-
-.post-card-link:hover .post-title {
-  color: var(--vp-c-brand-1);
-}
-
-.post-card-date {
-  display: block;
-  padding: 12px 16px;
-  font-size: 13px;
+.post-links time {
+  margin-inline-end: 0.7em;
   color: var(--vp-c-text-2);
+  white-space: nowrap;
 }
 
-.post-card-cover {
-  display: block;
-  width: 100%;
-  aspect-ratio: 2.35;
-  object-fit: cover;
-  object-position: center;
-}
-
-.post-card-body {
-  padding: 12px 16px 16px;
-}
-
-.post-card-body .post-title {
-  display: block;
-  font-size: 18px;
-}
-
-.post-card-body .post-tag {
-  display: inline-block;
-  margin-top: 8px;
+.post-links a {
+  color: var(--vp-c-brand-1);
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .post-list,

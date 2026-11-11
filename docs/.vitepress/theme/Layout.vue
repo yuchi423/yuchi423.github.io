@@ -7,7 +7,8 @@ import { data as posts } from './posts.data'
 import PostList from './PostList.vue'
 
 const { Layout } = DefaultTheme
-const { page } = useData()
+const { page, frontmatter } = useData()
+const cover = computed(() => typeof frontmatter.value.cover === 'string' ? frontmatter.value.cover : '')
 const section = computed(() => articleSection(page.value.relativePath))
 const currentUrl = computed(() => '/' + page.value.relativePath.replace(/\.md$/, ''))
 const sectionPosts = computed(() => posts.filter(post => post.section === section.value))
@@ -23,7 +24,7 @@ const neighbors = computed(() => [
     <template #home-features-after>
       <section class="home-posts" aria-labelledby="recent-title">
         <h2 id="recent-title">最新文章</h2>
-        <PostList :limit="6" cards />
+        <PostList :limit="6" />
       </section>
     </template>
     <template #sidebar-nav-after>
@@ -40,6 +41,9 @@ const neighbors = computed(() => [
         <a :href="withBase('/')">首页</a><span aria-hidden="true">/</span>
         <a :href="withBase(sections[section].link)">{{ sections[section].label }}</a>
       </nav>
+      <figure v-if="section && cover" class="article-cover">
+        <img :src="withBase(cover)" alt="">
+      </figure>
     </template>
     <template #doc-after>
       <nav v-if="currentIndex >= 0 && neighbors.length" class="post-pager" aria-label="相邻文章">

@@ -4,25 +4,20 @@ import { withBase } from 'vitepress'
 import { sections, type Section } from '../sections'
 import { data as posts } from './posts.data'
 
-const props = defineProps<{ section?: Section; limit?: number; cards?: boolean }>()
+const props = defineProps<{ section?: Section; limit?: number }>()
 const entries = computed(() => {
-  const matching = posts.filter(post => !props.section || post.section === props.section)
+  const matching = posts.filter(post =>
+    !post.url.endsWith('/__editor-preview') && (!props.section || post.section === props.section)
+  )
   return props.limit ? matching.slice(0, props.limit) : matching
 })
 </script>
 
 <template>
-  <ul v-if="cards && entries.length" class="post-cards">
-    <li v-for="post in entries" :key="post.url" class="post-card">
-      <a class="post-card-link" :href="withBase(post.url)">
-        <time class="post-card-date" :datetime="post.date">{{ post.date }}</time>
-        <img v-if="post.cover" class="post-card-cover" :src="withBase(post.cover)" alt="" loading="lazy">
-        <div class="post-card-body">
-          <span class="post-title">{{ post.title }}</span>
-          <p v-if="post.description" class="post-summary">{{ post.description }}</p>
-          <span class="post-tag">{{ sections[post.section].label }}</span>
-        </div>
-      </a>
+  <ul v-if="!section && entries.length" class="post-links" aria-label="文章列表">
+    <li v-for="post in entries" :key="post.url">
+      <time :datetime="post.date">{{ post.date }}</time>
+      <a :href="withBase(post.url)">{{ post.title }}</a>
     </li>
   </ul>
   <ul v-else-if="entries.length" class="post-list">

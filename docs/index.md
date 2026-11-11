@@ -11,7 +11,7 @@ hero:
   actions:
     - theme: brand
       text: 浏览文章
-      link: /tech/
+      link: /articles
     - theme: alt
       text: 关于我
       link: /about

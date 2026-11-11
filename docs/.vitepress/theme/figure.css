@@ -44,14 +44,12 @@
 
 .article-cover {
   margin: 0 0 28px;
-  padding-bottom: 22px;
-  border-bottom: 1px solid var(--vp-c-divider, var(--line));
 }
 
 .article-cover > img {
   display: block;
   width: 100%;
-  aspect-ratio: 5 / 1;
+  aspect-ratio: 4 / 1;
   object-fit: cover;
   object-position: center;
   border-radius: 8px;

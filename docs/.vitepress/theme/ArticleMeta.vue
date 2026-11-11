@@ -18,7 +18,4 @@ const updated = computed(() => page.value.lastUpdated
     <span>约 {{ post.minutes }} 分钟 · 全文 {{ post.wordCount.toLocaleString('zh-CN') }} 字</span>
     <a class="post-tag" :href="withBase(sections[post.section].link)">{{ sections[post.section].label }}</a>
   </div>
-  <figure v-if="post?.cover" class="article-cover">
-    <img :src="withBase(post.cover)" alt="">
-  </figure>
 </template>
