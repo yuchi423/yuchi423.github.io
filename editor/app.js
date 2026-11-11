@@ -109,6 +109,8 @@ function showCover() {
   element('cover-block').hidden = !post.cover
   if (post.cover) image.src = post.cover
   else image.removeAttribute('src')
+  image.style.setProperty('--cover-position', (post.fields.coverPosition ?? 50) + '%')
+  element('adjust-cover').disabled = !post.cover
   element('remove-cover').hidden = !post.cover
 }
 
@@ -286,6 +288,7 @@ async function insertAsset(picked, kind, range) {
     if (post !== current) return
     if (kind === 'cover') {
       post.cover = url
+      delete post.fields.coverPosition
       showCover()
       dirty = true
       if (previewMode) await showPreview()
@@ -326,6 +329,52 @@ markdown.addEventListener('paste', pasteImage, { capture: true })
 
 action('remove-cover', async () => {
   post.cover = ''
+  delete post.fields.coverPosition
+  showCover()
+  dirty = true
+  if (previewMode) await showPreview()
+})
+
+const coverDialog = element('cover-dialog')
+const cropImage = element('cover-crop-image')
+const cropPosition = element('cover-position')
+
+function showCropPosition() {
+  cropImage.style.setProperty('--cover-position', cropPosition.value + '%')
+}
+
+action('adjust-cover', () => {
+  if (!post.cover) return
+  cropImage.src = post.cover
+  cropPosition.value = post.fields.coverPosition ?? 50
+  showCropPosition()
+  coverDialog.showModal()
+})
+
+cropPosition.addEventListener('input', showCropPosition)
+
+let cropDrag
+cropImage.addEventListener('pointerdown', event => {
+  if (event.button !== 0 || !event.isPrimary || !cropImage.naturalWidth) return
+  const { width, height } = cropImage.getBoundingClientRect()
+  const overflow = width * cropImage.naturalHeight / cropImage.naturalWidth - height
+  if (overflow <= 0) return
+  cropDrag = { y: event.clientY, position: cropPosition.valueAsNumber, overflow }
+  cropImage.setPointerCapture(event.pointerId)
+})
+
+cropImage.addEventListener('pointermove', event => {
+  if (!cropDrag || !cropImage.hasPointerCapture(event.pointerId)) return
+  const position = cropDrag.position - (event.clientY - cropDrag.y) / cropDrag.overflow * 100
+  cropPosition.value = Math.round(Math.max(0, Math.min(100, position)))
+  showCropPosition()
+})
+
+cropImage.addEventListener('lostpointercapture', () => { cropDrag = undefined })
+
+action('confirm-cover', async () => {
+  post.fields.coverPosition = cropPosition.valueAsNumber
+  coverDialog.close()
   showCover()
   dirty = true
   if (previewMode) await showPreview()

@@ -21,6 +21,7 @@
     </div>
     <div class="tools">
       <button id="cover" type="button">封面</button>
+      <button id="adjust-cover" type="button" disabled>调整裁切</button>
       <button id="remove-cover" type="button" hidden>移除封面</button>
       <button id="image" type="button">图片</button>
       <button id="link" type="button">链接</button>
@@ -63,6 +64,18 @@
   </main>
 
   <input id="file" type="file" hidden>
+
+  <dialog id="cover-dialog" aria-labelledby="cover-dialog-title">
+    <h2 id="cover-dialog-title">调整裁切</h2>
+    <figure class="article-cover cover-crop">
+      <img id="cover-crop-image" alt="封面裁切预览" draggable="false">
+    </figure>
+    <label>上下位置 <input id="cover-position" type="range" min="0" max="100" value="50"></label>
+    <div class="dialog-actions">
+      <button type="button" data-close>取消</button>
+      <button id="confirm-cover" type="button" class="primary">确认</button>
+    </div>
+  </dialog>
 
   <dialog id="open-dialog">
     <form id="open-form" method="dialog">

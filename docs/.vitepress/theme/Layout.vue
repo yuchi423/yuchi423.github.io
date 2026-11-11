@@ -9,6 +9,10 @@ import PostList from './PostList.vue'
 const { Layout } = DefaultTheme
 const { page, frontmatter } = useData()
 const cover = computed(() => typeof frontmatter.value.cover === 'string' ? frontmatter.value.cover : '')
+const coverPosition = computed(() => {
+  const position = frontmatter.value.coverPosition
+  return typeof position === 'number' && position >= 0 && position <= 100 ? position : 50
+})
 const section = computed(() => articleSection(page.value.relativePath))
 const currentUrl = computed(() => '/' + page.value.relativePath.replace(/\.md$/, ''))
 const sectionPosts = computed(() => posts.filter(post => post.section === section.value))
@@ -42,7 +46,7 @@ const neighbors = computed(() => [
         <a :href="withBase(sections[section].link)">{{ sections[section].label }}</a>
       </nav>
       <figure v-if="section && cover" class="article-cover">
-        <img :src="withBase(cover)" alt="">
+        <img :src="withBase(cover)" :style="{ '--cover-position': coverPosition + '%' }" alt="">
       </figure>
     </template>
     <template #doc-after>
