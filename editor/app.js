@@ -109,6 +109,8 @@ function showCover() {
   element('cover-block').hidden = !post.cover
   if (post.cover) image.src = post.cover
   else image.removeAttribute('src')
+  const [width, height] = post.fields.coverRatio ?? [4, 1]
+  image.style.setProperty('--cover-ratio', width / height)
   image.style.setProperty('--cover-position', (post.fields.coverPosition ?? 50) + '%')
   element('adjust-cover').disabled = !post.cover
   element('remove-cover').hidden = !post.cover
@@ -120,6 +122,7 @@ function loadPost(next) {
   title.value = next.title
   section.value = next.section
   section.disabled = Boolean(next.path)
+  element('push-update').disabled = !next.path
   date.value = next.date
   markdown.value = next.body
   editor.setValue(next.body, true)
@@ -289,6 +292,7 @@ async function insertAsset(picked, kind, range) {
     if (kind === 'cover') {
       post.cover = url
       delete post.fields.coverPosition
+      delete post.fields.coverRatio
       showCover()
       dirty = true
       if (previewMode) await showPreview()
@@ -330,6 +334,7 @@ markdown.addEventListener('paste', pasteImage, { capture: true })
 action('remove-cover', async () => {
   post.cover = ''
   delete post.fields.coverPosition
+  delete post.fields.coverRatio
   showCover()
   dirty = true
   if (previewMode) await showPreview()
@@ -338,20 +343,37 @@ action('remove-cover', async () => {
 const coverDialog = element('cover-dialog')
 const cropImage = element('cover-crop-image')
 const cropPosition = element('cover-position')
+const cropWidth = element('cover-width')
+const cropHeight = element('cover-height')
 
 function showCropPosition() {
+  if (cropWidth.validity.valid && cropHeight.validity.valid) {
+    cropImage.parentElement.style.setProperty('--cover-ratio', cropWidth.valueAsNumber / cropHeight.valueAsNumber)
+  }
   cropImage.style.setProperty('--cover-position', cropPosition.value + '%')
 }
 
 action('adjust-cover', () => {
   if (!post.cover) return
   cropImage.src = post.cover
+  const [width, height] = post.fields.coverRatio ?? [4, 1]
+  cropWidth.value = width
+  cropHeight.value = height
   cropPosition.value = post.fields.coverPosition ?? 50
   showCropPosition()
   coverDialog.showModal()
 })
 
-cropPosition.addEventListener('input', showCropPosition)
+for (const input of [cropPosition, cropWidth, cropHeight]) {
+  input.addEventListener('input', showCropPosition)
+}
+
+action('reset-cover', () => {
+  cropWidth.value = 4
+  cropHeight.value = 1
+  cropPosition.value = 50
+  showCropPosition()
+})
 
 let cropDrag
 cropImage.addEventListener('pointerdown', event => {
@@ -372,12 +394,25 @@ cropImage.addEventListener('pointermove', event => {
 
 cropImage.addEventListener('lostpointercapture', () => { cropDrag = undefined })
 
-action('confirm-cover', async () => {
-  post.fields.coverPosition = cropPosition.valueAsNumber
+element('cover-form').addEventListener('submit', async event => {
+  event.preventDefault()
+  const width = cropWidth.valueAsNumber
+  const height = cropHeight.valueAsNumber
+  const position = cropPosition.valueAsNumber
+  if (width / height === 4) delete post.fields.coverRatio
+  else post.fields.coverRatio = [width, height]
+  if (position === 50) delete post.fields.coverPosition
+  else post.fields.coverPosition = position
   coverDialog.close()
   showCover()
   dirty = true
-  if (previewMode) await showPreview()
+  if (previewMode) {
+    try {
+      await showPreview()
+    } catch (error) {
+      showStatus(error.message, true)
+    }
+  }
 })
 
 const linkDialog = element('link-dialog')
@@ -454,5 +489,83 @@ action('save', async () => {
   post.path = path
   section.disabled = true
   dirty = false
-  showStatus('已保存到 docs/' + path + '。提交并推送到 main 后发布。')
+  element('push-update').disabled = false
+  showStatus('已保存到 docs/' + path + '。点击「推送更新」查看改动。')
+})
+
+const pushDialog = element('push-dialog')
+const pushStatus = element('push-status')
+const confirmPush = element('confirm-push')
+const cancelPush = element('cancel-push')
+let pushReview
+
+function renderPushDiff({ before, after, hunks }) {
+  const lines = text => text ? text.replace(/\n$/, '').split('\n') : []
+  const left = lines(before)
+  const right = lines(after)
+  if (!before && after) hunks = [[0, 0, 1, right.length]]
+  const rows = document.createDocumentFragment()
+  let oldIndex = 0
+  let newIndex = 0
+
+  function addRow(oldLine, newLine, changed = false) {
+    const row = document.createElement('tr')
+    for (const [line, style] of [[oldLine, 'removed'], [newLine, 'added']]) {
+      const cell = row.insertCell()
+      if (line !== undefined) {
+        cell.textContent = line || '\u00a0'
+        if (changed) cell.className = style
+      }
+    }
+    rows.append(row)
+  }
+
+  for (const [oldLine, oldCount, newLine, newCount] of hunks) {
+    const oldStart = oldCount ? oldLine - 1 : oldLine
+    const newStart = newCount ? newLine - 1 : newLine
+    while (oldIndex < oldStart && newIndex < newStart) addRow(left[oldIndex++], right[newIndex++])
+    for (let offset = 0; offset < Math.max(oldCount, newCount); offset++) {
+      addRow(offset < oldCount ? left[oldIndex++] : undefined, offset < newCount ? right[newIndex++] : undefined, true)
+    }
+  }
+  while (oldIndex < left.length || newIndex < right.length) addRow(left[oldIndex++], right[newIndex++])
+  element('push-diff').replaceChildren(rows)
+  pushDialog.querySelector('.push-diff').scrollTop = 0
+}
+
+action('push-update', async () => {
+  const current = post
+  const review = await api('push-review', { path: current.path })
+  if (post !== current || pushDialog.open) return
+  if (!review.files.length) {
+    showStatus('已保存的文章及素材没有改动。')
+    return
+  }
+  pushReview = { path: current.path, token: review.token }
+  renderPushDiff(review)
+  element('push-files').textContent = '将提交 ' + review.files.join('、')
+  pushStatus.textContent = ''
+  pushDialog.showModal()
+})
+
+pushDialog.addEventListener('cancel', event => {
+  if (confirmPush.disabled) event.preventDefault()
+})
+
+action('confirm-push', async () => {
+  confirmPush.disabled = true
+  cancelPush.disabled = true
+  pushStatus.textContent = '正在提交并推送到 GitHub…'
+  pushStatus.classList.remove('error')
+  try {
+    const { updated } = await api('push-update', pushReview)
+    pushDialog.close()
+    showStatus(updated ? '已推送到 GitHub，网站将自动构建。' : '已保存的文章及素材没有改动。')
+  } catch (error) {
+    pushStatus.textContent = error.message
+    pushStatus.classList.add('error')
+  } finally {
+    confirmPush.disabled = false
+    cancelPush.disabled = false
+  }
 })

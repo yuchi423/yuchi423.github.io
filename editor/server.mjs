@@ -1,11 +1,13 @@
 import { randomUUID } from 'node:crypto'
-import { cp, mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises'
+import { cp, glob, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { basename, dirname, extname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { createPublisher } from './publish.mjs'
 
 const editorDir = fileURLToPath(new URL('./', import.meta.url))
 const repo = join(editorDir, '..')
+const publisher = createPublisher(repo)
 const docs = join(repo, 'docs')
 const drafts = join(repo, 'drafts', 'editor')
 const preview = join(repo, 'drafts', '.editor-preview')
@@ -128,6 +130,14 @@ async function restoreAssets(post, destination) {
   }
 }
 
+async function removeUnusedCover(url) {
+  if (!/^\/images\/[\p{L}\p{N}_-]+(?:\.[a-z0-9]+)?$/iu.test(url)) return
+  for await (const file of glob('**/*.md', { cwd: docs, exclude: ['.vitepress', 'public'] })) {
+    if ((await readFile(join(docs, file), 'utf8')).includes(url)) return
+  }
+  await rm(join(docs, 'public', url.slice(1)), { force: true })
+}
+
 async function jsonBody(request) {
   check(request.headers['content-type'] === 'application/json', '请选择编辑器操作')
   const chunks = []
@@ -165,6 +175,23 @@ async function listPosts() {
 }
 
 function editorMiddleware(getMarkdown) {
+  async function readPost(path) {
+    const file = postPath(path)
+    const env = { path: file, relativePath: path }
+    getMarkdown().render(await readFile(file, 'utf8'), env)
+    const { title, date, cover, ...fields } = env.frontmatter
+    return {
+      id: randomUUID(),
+      path,
+      section: path.split('/')[0],
+      title: title || env.title || basename(path, '.md'),
+      date: normalizeDate(date),
+      cover: cover || '',
+      fields,
+      body: env.content.replace(/^\s*# [^\r\n]*(?:\r?\n){1,2}/, '').replace(/\r\n/g, '\n').trimEnd()
+    }
+  }
+
   return async (request, response, next) => {
     const { pathname, searchParams } = new URL(request.url, 'http://127.0.0.1')
     if (pathname === '/__editor') {
@@ -223,20 +250,7 @@ function editorMiddleware(getMarkdown) {
         }
         if (action === 'post') {
           const path = searchParams.get('path')
-          const file = postPath(path)
-          const env = { path: file, relativePath: path }
-          getMarkdown().render(await readFile(file, 'utf8'), env)
-          const { title, date, cover, ...fields } = env.frontmatter
-          return send(response, await extractEmbeddedImages({
-            id: randomUUID(),
-            path,
-            section: path.split('/')[0],
-            title: title || env.title || basename(path, '.md'),
-            date: normalizeDate(date),
-            cover: cover || '',
-            fields,
-            body: env.content.replace(/^\s*# [^\r\n]*(?:\r?\n){1,2}/, '').replace(/\r\n/g, '\n').trimEnd()
-          }))
+          return send(response, await extractEmbeddedImages(await readPost(path)))
         }
       }
       if (request.method === 'POST') {
@@ -245,6 +259,16 @@ function editorMiddleware(getMarkdown) {
           const kind = data.kind === 'images' ? 'images' : 'attachments'
           const url = await storeAsset(data.id, data.name, kind, Buffer.from(data.content, 'base64'))
           return send(response, { url })
+        }
+        if (action === 'push-review' || action === 'push-update') {
+          const host = request.headers.host
+          check(/^(127\.0\.0\.1|localhost)(:\d+)?$/.test(host) &&
+            (!request.headers.origin || request.headers.origin === 'http://' + host), '请在本地编辑器操作')
+          postPath(data.path)
+          const result = action === 'push-review'
+            ? await publisher.review(data.path)
+            : await publisher.push(data.path, data.token)
+          return send(response, result)
         }
         const post = await extractEmbeddedImages(data.post)
         const folder = draftFolder(post.id)
@@ -269,7 +293,10 @@ function editorMiddleware(getMarkdown) {
             throw error
           }), '已有同名文章，请换个标题或打开原文')
           await restoreAssets(post, join(docs, 'public'))
-          await write(target, serialize(post))
+          const existing = post.path ? await readPost(path) : undefined
+          const content = serialize(post)
+          if (!existing || content !== serialize(existing)) await write(target, content)
+          if (existing?.cover && existing.cover !== post.cover) await removeUnusedCover(existing.cover)
           return send(response, { path })
         }
       }

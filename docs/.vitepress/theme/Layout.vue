@@ -13,6 +13,13 @@ const coverPosition = computed(() => {
   const position = frontmatter.value.coverPosition
   return typeof position === 'number' && position >= 0 && position <= 100 ? position : 50
 })
+const coverRatio = computed(() => {
+  const ratio = frontmatter.value.coverRatio
+  return Array.isArray(ratio) && ratio.length === 2 &&
+    ratio.every(value => typeof value === 'number' && Number.isFinite(value) && value >= 1)
+    ? ratio[0] / ratio[1]
+    : 4
+})
 const section = computed(() => articleSection(page.value.relativePath))
 const currentUrl = computed(() => '/' + page.value.relativePath.replace(/\.md$/, ''))
 const sectionPosts = computed(() => posts.filter(post => post.section === section.value))
@@ -46,7 +53,7 @@ const neighbors = computed(() => [
         <a :href="withBase(sections[section].link)">{{ sections[section].label }}</a>
       </nav>
       <figure v-if="section && cover" class="article-cover">
-        <img :src="withBase(cover)" :style="{ '--cover-position': coverPosition + '%' }" alt="">
+        <img :src="withBase(cover)" :style="{ '--cover-position': coverPosition + '%', '--cover-ratio': coverRatio }" alt="">
       </figure>
     </template>
     <template #doc-after>

@@ -49,7 +49,7 @@
 .article-cover > img {
   display: block;
   width: 100%;
-  aspect-ratio: 4 / 1;
+  aspect-ratio: var(--cover-ratio, 4);
   object-fit: cover;
   object-position: center var(--cover-position, 50%);
   border-radius: 8px;

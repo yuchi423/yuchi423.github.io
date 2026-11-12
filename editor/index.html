@@ -32,6 +32,7 @@
     <div class="tools">
       <button id="save-draft" type="button">保存草稿</button>
       <button id="save" type="button" class="primary">保存到博客</button>
+      <button id="push-update" type="button" disabled>推送更新</button>
     </div>
     <p id="status" role="status" class="status">正在加载编辑器…</p>
   </header>
@@ -67,13 +68,37 @@
 
   <dialog id="cover-dialog" aria-labelledby="cover-dialog-title">
     <h2 id="cover-dialog-title">调整裁切</h2>
-    <figure class="article-cover cover-crop">
-      <img id="cover-crop-image" alt="封面裁切预览" draggable="false">
-    </figure>
-    <label>上下位置 <input id="cover-position" type="range" min="0" max="100" value="50"></label>
+    <form id="cover-form" method="dialog">
+      <div class="cover-ratio">
+        <label>比例宽 <input id="cover-width" type="number" min="1" step="any" required value="4"></label>
+        <span aria-hidden="true">∶</span>
+        <label>比例高 <input id="cover-height" type="number" min="1" step="any" required value="1"></label>
+        <button id="reset-cover" type="button">恢复默认</button>
+      </div>
+      <figure class="article-cover cover-crop">
+        <img id="cover-crop-image" alt="封面裁切预览" draggable="false">
+      </figure>
+      <label>上下位置 <input id="cover-position" type="range" min="0" max="100" value="50"></label>
+      <div class="dialog-actions">
+        <button type="button" data-close>取消</button>
+        <button id="confirm-cover" type="submit" class="primary">确认</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="push-dialog" aria-labelledby="push-title">
+    <h2 id="push-title">确认推送更新</h2>
+    <p id="push-files"></p>
+    <div class="push-diff" tabindex="0" aria-label="文章全文修改对比">
+      <table>
+        <thead><tr><th scope="col">修改前</th><th scope="col">修改后</th></tr></thead>
+        <tbody id="push-diff"></tbody>
+      </table>
+    </div>
+    <p id="push-status" class="status" role="status"></p>
     <div class="dialog-actions">
-      <button type="button" data-close>取消</button>
-      <button id="confirm-cover" type="button" class="primary">确认</button>
+      <button id="cancel-push" type="button" data-close autofocus>取消</button>
+      <button id="confirm-push" type="button" class="primary">确认推送</button>
     </div>
   </dialog>
 

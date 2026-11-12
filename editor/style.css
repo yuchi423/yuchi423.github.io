@@ -264,3 +264,56 @@ dialog label { display: grid; gap: 6px; margin-bottom: 12px; }
 }
 
 #cover-position { flex: 1; }
+
+.cover-crop > img {
+  width: min(100%, calc(50vh * var(--cover-ratio, 4)));
+  margin-inline: auto;
+}
+
+.cover-ratio {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+#cover-dialog .cover-ratio label { margin: 0; }
+.cover-ratio input { width: 56px; }
+
+#push-dialog { width: min(1100px, calc(100vw - 64px)); }
+#push-files { overflow-wrap: anywhere; color: var(--muted); font-size: 13px; }
+
+.push-diff {
+  max-height: 62vh;
+  margin-bottom: 12px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+.push-diff table { width: 100%; table-layout: fixed; border-collapse: collapse; }
+
+.push-diff th, .push-diff td {
+  padding: 4px 10px;
+  border-inline-end: 1px solid var(--line);
+  text-align: start;
+  vertical-align: top;
+}
+
+.push-diff th {
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+
+.push-diff td {
+  font: 13px/1.6 ui-monospace, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.push-diff .removed { background: #e5575726; }
+.push-diff .added { background: #25a66129; }
+#push-status { margin-bottom: 8px; white-space: pre-wrap; overflow-wrap: anywhere; }
